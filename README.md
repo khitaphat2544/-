@@ -52,6 +52,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom,0px));max-width:90vw;background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:99px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}.toast.on{opacity:1}
 .warn{background:var(--hi);border-color:#e3b24f}
 #aNum,#aAmt{font-size:22px;font-weight:800}
+.pc{display:inline-block;font-weight:800;font-size:17px;letter-spacing:1px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:1px 8px;margin:3px 4px 3px 0}
 </style>
 </head>
 <body>
@@ -89,6 +90,7 @@ const TYPES={t2:{n:'2 ตัวบน เต็ง',g:'เต็ง',len:2,c:70,
 const isToad=t=>TYPES[t]&&TYPES[t].g==='โต๊ด';
 const perms=x=>{if(x.length<=1)return[x];const o=new Set();for(let i=0;i<x.length;i++)for(const p of perms(x.slice(0,i)+x.slice(i+1)))o.add(x[i]+p);return[...o]};
 const canon=(t,n)=>isToad(t)?n.split('').sort().join(''):n;
+const chips=n=>perms(n).map(p=>`<span class="pc">${p}</span>`).join('');
 const stake=e=>e.per&&isToad(e.type)?e.amt*perms(e.num).length:e.amt;
 const KEY='poyhuay.v1';
 const def=()=>({customers:[],draws:{},cur:null,rc:{},rh:{},pct:100});
@@ -138,156 +140,4 @@ function winnersOf(d){const r=d.res||{},f=r.first||'',l2=r.low2||'';if(f.length!
  return out}
 function calc(d){const W=winnersOf(d),bets=d.entries.reduce((a,e)=>a+stake(e),0),sent=bets*S.pct/100;
  const winC=W.reduce((a,w)=>a+w.payC,0),recH=W.reduce((a,w)=>a+w.payH,0);
- const per={};d.entries.forEach(e=>{const p=per[e.cid]=per[e.cid]||{bets:0,unpaid:0,win:0};p.bets+=stake(e);if(!e.paid)p.unpaid+=stake(e)});
- W.forEach(w=>{per[w.cid].win+=w.payC});
- const hasRes=!!(d.res&&((d.res.first||'').length===6||(d.res.low2||'').length===2));
- return{W,bets,sent,winC,recH,per,profit:bets-winC-sent+recH,hasRes}}
-function group(d){const g={};for(const e of d.entries){const k=e.type+'|'+canon(e.type,e.num);(g[k]=g[k]||[]).push(e)}return g}
-
-function home(){const d=cur(),E=d.entries,tot=E.reduce((a,e)=>a+stake(e),0),pd=E.filter(e=>e.paid).reduce((a,e)=>a+stake(e),0),g=group(d),keys=Object.keys(g).sort(),dups=keys.filter(k=>g[k].length>1);
- const who=k=>g[k].map(e=>esc(cname(e.cid))+' '+fmt(e.amt)).join(' · ');
- const n=Math.round((new Date(d.date+'T00:00:00')-new Date(iso(new Date())+'T00:00:00'))/864e5);
- let h=`<div class="card"><h2>งวด ${dstr(d.date)}</h2><div class="mut" style="margin:-6px 0 8px">${n>0?'อีก '+n+' วันหวยออก':n===0?'หวยออกวันนี้':'หวยออกแล้ว'} · ${E.length} รายการ</div><div class="stats"><div class="stat"><span class="mut">ยอดรวม</span><b>${fmt(tot)}</b></div><div class="stat"><span class="mut">รับแล้ว</span><b class="paid">${fmt(pd)}</b></div><div class="stat"><span class="mut">ค้างจ่าย</span><b class="unpaid">${fmt(tot-pd)}</b></div></div></div>
- <div class="card ${dups.length?'dup':''}"><h2>เลขซ้ำ (${dups.length})</h2>`+
- (dups.length?dups.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span> ${g[k].length} คน<div class="mut">${who(k)}</div>${isToad(t)?'<div class="mut">สลับ: '+perms(n).join(' · ')+'</div>':''}</div><b>${fmt(g[k].reduce((a,e)=>a+e.amt,0))}</b></div>`}).join(''):'<div class="mut">ยังไม่มีเลขซ้ำ</div>')+
- `</div><div class="card"><h2>ใครซื้อเลขอะไรบ้าง</h2>`+
- (keys.length?keys.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span><div class="mut">${who(k)}</div>${isToad(t)?'<div class="mut">สลับ: '+perms(n).join(' · ')+'</div>':''}</div></div>`}).join(''):'<div class="empty">ยังไม่มีโพย ไปที่แท็บ “ลูกค้า”</div>')+'</div>';
- return h}
-
-function cust(){const d=cur();let h=`<div class="card"><h2>เพิ่มลูกค้า</h2><div class="row"><input type="text" id="cNew" placeholder="พิมพ์ชื่อลูกค้า" autocomplete="off"><button class="btn" data-a="cAdd" style="flex:none">เพิ่ม</button></div></div>`;
- if(!S.customers.length)return h+'<div class="card empty">ยังไม่มีลูกค้า พิมพ์ชื่อด้านบนแล้วกด “เพิ่ม”</div>';
- for(const c of [...S.customers].sort((a,b)=>a.name.localeCompare(b.name,'th'))){const es=d.entries.filter(e=>e.cid===c.id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),t=es.reduce((s,e)=>s+stake(e),0),u=es.filter(e=>!e.paid).reduce((s,e)=>s+stake(e),0);
-  h+=`<div class="card"><div class="row sp"><h2 style="margin:0">${esc(c.name)}</h2><span><button class="btn" data-a="add" data-id="${c.id}">+ แทง</button> <button class="x" data-a="dc" data-id="${c.id}" aria-label="ลบลูกค้า">🗑</button></span></div>
-  <div class="mut">รวม ${fmt(t)} บาท · <span class="${u?'unpaid':'paid'}">${u?'ค้าง '+fmt(u):'จ่ายครบ'}</span></div>`+
-  es.map(e=>`<div class="item"><span class="num">${e.num}</span><div class="g"><span class="tag">${TYPES[e.type]?TYPES[e.type].n:e.type}</span> ${fmt(e.amt)} บาท${e.per&&isToad(e.type)?' × '+perms(e.num).length+' ชุด = '+fmt(stake(e))+' บาท':''}<div class="mut">ซื้อวันที่ ${e.date?dstr(e.date):'-'}</div>${isToad(e.type)?`<div class="mut">สลับเลขให้แล้ว: ${perms(e.num).join(' · ')}</div>`:''}</div><button class="chip ${e.paid?'ok':'no'}" data-a="pay" data-id="${e.id}">${e.paid?'จ่ายแล้ว ✓':'ยังไม่จ่าย'}</button><button class="x" data-a="del" data-id="${e.id}" aria-label="ลบ">×</button></div>`).join('')+'</div>'}
- return h}
-
-function res(){const d=cur(),r=d.res||{};
- let h=`<div class="card"><h2>ระบุรางวัลที่ออก</h2><div class="row"><div><label class="l">รางวัลที่ 1 (6 หลัก)</label><input type="tel" inputmode="numeric" maxlength="6" id="rFirst" value="${r.first||''}"></div><div><label class="l">เลขท้าย 2 ตัวล่าง</label><input type="tel" inputmode="numeric" maxlength="2" id="rLow" value="${r.low2||''}"></div></div></div>
- <div class="card"><h2>กำหนดตัวคูณ (บาทละกี่บาท)</h2><table><tr><th>ประเภท</th><th>จ่ายลูกค้า</th><th>เจ้าจ่ายเรา</th></tr>`+
- Object.keys(TYPES).map(k=>`<tr><td>${TYPES[k].n}</td><td><input type="number" inputmode="decimal" data-rc="${k}" value="${S.rc[k]}"></td><td><input type="number" inputmode="decimal" data-rh="${k}" value="${S.rh[k]}"></td></tr>`).join('')+
- `</table><label class="l">สัดส่วนยอดที่ส่งต่อให้เจ้า (%)</label><input type="number" inputmode="decimal" id="pct" value="${S.pct}"><div class="mut">โต๊ด = ถูกเลขสลับตำแหน่งได้ ตั้งราคาจ่ายโต๊ดแยกจากเต็งในตารางนี้ได้ เช่น ส่งต่อทั้งหมด = 100, ส่งครึ่งเดียว = 50 ตัวคูณใช้กับทุกงวด</div></div>`;
- return h+'<div id="resOut">'+resOut()+'</div>'}
-function resOut(){const d=cur();let h='';const c=calc(d);if(!c.hasRes)return h+'<div class="card empty">ใส่เลขที่ออก แอพจะตรวจให้ทันที</div>';
- if(!c.W.length)return h+'<div class="card empty">งวดนี้ไม่มีใครถูกรางวัล</div>';
- const by={};c.W.forEach(w=>(by[w.cid]=by[w.cid]||[]).push(w));
- h+=`<h2 style="margin:6px 2px">ลูกค้าที่ถูกรางวัล ${Object.keys(by).length} คน</h2>`;
- for(const id in by){const a=by[id];h+=`<div class="card win"><div class="row sp"><h2 style="margin:0">${esc(cname(id))}</h2><b class="neg" style="font-size:22px">${fmt(a.reduce((s,w)=>s+w.payC,0))}</b></div>`+
-  a.map(w=>`<div class="item"><span class="num">${w.num}</span><div class="g"><span class="tag">${TYPES[w.type].n}</span> ${fmt(w.amt)} × ${S.rc[w.type]}<div class="mut">${w.paid?'':'⚠ ยังไม่ได้รับเงินซื้อ'}</div></div><b>${fmt(w.payC)}</b></div>`).join('')+'</div>'}
- return h}
-
-function sum(){const d=cur(),c=calc(d);
- let h=`<div class="card"><h2>สรุปยอดรวมงวด ${dstr(d.date)}</h2><table>
- <tr><td>ยอดซื้อรวมทุกลูกค้า</td><td>${fmt(c.bets)}</td></tr>
- <tr><td>ส่งให้เจ้า (${S.pct}%)</td><td>${fmt(c.sent)}</td></tr>
- <tr><td>ต้องจ่ายลูกค้า (ถูกรางวัล)</td><td class="neg">${fmt(c.winC)}</td></tr>
- <tr><td>เจ้าต้องจ่ายเรา</td><td class="pos">${fmt(c.recH)}</td></tr>
- <tr><td><b>${c.profit>=0?'กำไรสุทธิ':'ขาดทุนสุทธิ'}</b></td><td><b>${sgn(c.profit)}</b></td></tr></table>
- ${c.hasRes?'':'<div class="mut" style="margin-top:6px">ยังไม่ได้ใส่ผลรางวัล</div>'}
- <button class="btn w" style="margin-top:12px" data-a="sendH">ส่งไฟล์สรุปยอดให้เจ้า</button></div>`;
- h+=`<div class="card"><h2>สรุปรายลูกค้า (งวดนี้)</h2><div class="sc"><table><tr><th>ลูกค้า</th><th>ซื้อ</th><th>ถูก</th><th>สุทธิ</th></tr>`+
- (Object.keys(c.per).map(id=>{const p=c.per[id];return`<tr><td>${esc(cname(id))}${p.unpaid?`<div class="mut">ค้างจ่าย ${fmt(p.unpaid)}</div>`:''}</td><td>${fmt(p.bets)}</td><td>${fmt(p.win)}</td><td>${sgn(p.win-p.bets)}</td></tr>`}).join('')||'<tr><td colspan="4" class="empty">ไม่มีข้อมูล</td></tr>')+
- `</table></div><div class="mut" style="margin-top:6px">สุทธิ + = เราต้องจ่ายลูกค้า · − = เก็บเงินจากลูกค้า</div></div>`;
- const ids=Object.keys(S.draws).sort((a,b)=>S.draws[b].date.localeCompare(S.draws[a].date));
- h+=`<div class="card"><h2>สรุปย้อนหลังรายงวด</h2><select id="histSel"><option value="all">ลูกค้าทุกคน</option>${S.customers.map(x=>`<option value="${x.id}" ${hist===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}</select><div class="sc"><table style="margin-top:8px"><tr><th>งวด</th><th>ซื้อ</th><th>ถูก</th><th>สุทธิ</th></tr>`;
- let tb=0,tw=0;for(const i of ids){const dd=S.draws[i],cc=calc(dd);let b,w;
-  if(hist==='all'){b=cc.bets;w=cc.winC}else{const p=cc.per[hist]||{bets:0,win:0};b=p.bets;w=p.win}
-  if(!b&&!w)continue;tb+=b;tw+=w;h+=`<tr><td>${dstr(dd.date)}${cc.hasRes?'':' <span class="mut">(ยังไม่ออก)</span>'}</td><td>${fmt(b)}</td><td>${fmt(w)}</td><td>${sgn(w-b)}</td></tr>`}
- return h+`<tr><th>รวม</th><th>${fmt(tb)}</th><th>${fmt(tw)}</th><th>${sgn(tw-tb)}</th></tr></table></div></div>`}
-
-function menu(){return `<div class="card"><h2>เมนู</h2>
- <button class="btn w" data-a="mNew">เปิดงวดใหม่ (กำหนดวันที่เอง)</button>
- <button class="btn w sec" data-a="mBackup">บันทึกไฟล์สำรองข้อมูลทั้งหมด</button>
- <button class="btn w sec" data-a="mLoad">โหลดไฟล์โพยจากเครื่อง</button>
- <p class="mut">ระบบเปิดงวดให้อัตโนมัติ: วันที่ 10 เปิดงวดวันที่ 16 ของเดือน และวันที่ 25 เปิดงวดวันที่ 1 ของเดือนถัดไป การโหลดไฟล์จะรวมลูกค้าและงวดจากไฟล์เข้ากับข้อมูลในเครื่อง</p></div>
- <div class="card"><h2>ลบงวดนี้</h2><p class="mut">ลบรายการและผลรางวัลของงวด ${dstr(cur().date)} ทั้งหมด</p><button class="btn sec" data-a="mDel">ลบงวดนี้</button></div>`}
-
-function render(){
- if(!S.draws[S.cur])autoOpen();
- const ids=Object.keys(S.draws).sort((a,b)=>S.draws[b].date.localeCompare(S.draws[a].date));
- $('drawSel').innerHTML=ids.map(i=>`<option value="${i}" ${i===S.cur?'selected':''}>งวด ${dstr(S.draws[i].date)}</option>`).join('');
- const warn=memOnly?'<div class="card warn">⚠ เบราว์เซอร์นี้ไม่ยอมเก็บข้อมูลถาวร (อาจเปิดโหมดส่วนตัวอยู่) ข้อมูลจะหายเมื่อปิดหน้านี้ ควรกด “บันทึกไฟล์สำรองข้อมูล” ในเมนูบ่อย ๆ</div>':'';
- $('app').innerHTML=warn+{home,cust,res,sum,menu}[tab]();
- document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.t===tab))}
-
-function addCust(){const i=$('cNew');if(!i)return;const n=i.value.trim();
- if(!n)return say('พิมพ์ชื่อลูกค้าก่อน');
- if(S.customers.some(c=>c.name.toLowerCase()===n.toLowerCase()))return say('มีชื่อ “'+n+'” อยู่แล้ว');
- S.customers.push({id:uid(),name:n});save();render();say('เพิ่ม “'+n+'” แล้ว');const j=$('cNew');if(j)j.focus()}
-function openAdd(cid){if(!S.customers.length){tab='cust';render();return say('เพิ่มรายชื่อลูกค้าก่อน')}
- $('aCust').innerHTML=S.customers.map(c=>`<option value="${c.id}" ${c.id===cid?'selected':''}>${esc(c.name)}</option>`).join('');
- $('aType').innerHTML=['เต็ง','โต๊ด','วิ่ง'].map(g=>`<optgroup label="${g==='เต็ง'?'เต็ง (ถูกเลขและตำแหน่ง)':g==='โต๊ด'?'โต๊ด (ถูกเลข สลับที่ได้)':'วิ่ง'}">`+Object.keys(TYPES).filter(k=>TYPES[k].g===g).map(k=>`<option value="${k}">${TYPES[k].n}</option>`).join('')+'</optgroup>').join('');
- $('aType').value=lastType;$('aNum').maxLength=TYPES[lastType].len;$('aNum').value='';$('aAmt').value='';$('aDate').value=iso(new Date());$('aErr').textContent='';prev();
- openD(dlgAdd);setTimeout(()=>$('aNum').focus(),80)}
-function prev(){const t=$('aType').value,n=$('aNum').value.trim(),toad=isToad(t);$('aPerWrap').style.display=toad?'flex':'none';let s='จ่ายลูกค้าบาทละ '+S.rc[t]+' · ';
- if(toad){if(n.length===TYPES[t].len){const p=perms(n),a=parseFloat($('aAmt').value);s+='สลับเลขให้ '+p.length+' ชุด: '+p.join(' · ');if($('aPer').checked&&a>0)s+=' · รวม '+fmt(a*p.length)+' บาท ('+p.length+' ชุด × '+fmt(a)+')'}else s+='โต๊ด ถูกเลขสลับตำแหน่งได้ (แอพสลับให้)'}
- else if(TYPES[t].g==='เต็ง')s+='เต็ง ต้องถูกทั้งเลขและตำแหน่ง';else s+='วิ่ง ถูกถ้ามีเลขนี้ออก';
- $('aPrev').textContent=s}
-function saveAdd(){const cid=$('aCust').value,type=$('aType').value,num=$('aNum').value.trim(),amt=parseFloat($('aAmt').value),err=$('aErr');
- if(!cid)return err.textContent='เลือกลูกค้า';
- if(!new RegExp('^\\d{'+TYPES[type].len+'}$').test(num))return err.textContent='เลขต้องเป็นตัวเลข '+TYPES[type].len+' หลัก';
- if(!(amt>0))return err.textContent='ใส่จำนวนเงิน';
- cur().entries.push({id:uid(),cid,type,num,amt,date:$('aDate').value||iso(new Date()),paid:$('aPaid').checked,per:isToad(type)&&$('aPer').checked});save();render();
- $('aNum').value='';$('aAmt').value='';$('aNum').focus();err.textContent='บันทึกแล้ว ✓ '+cname(cid)+' '+num;prev()}
-function sendHouse(){const d=cur(),c=calc(d),g=group(d),L=['สรุปยอดส่งเจ้า งวดวันที่ '+dstr(d.date),''];
- const agg={};for(const k in g)agg[k]=g[k].reduce((a,e)=>a+e.amt,0);
- for(const t in TYPES){const ks=Object.keys(agg).filter(k=>k.startsWith(t+'|')).sort();if(!ks.length)continue;
-  L.push('['+TYPES[t].n+']');ks.forEach(k=>{const n=k.split('|')[1];L.push(n+(isToad(t)?' (สลับ: '+perms(n).join(' ')+')':'')+' = '+fmt(agg[k]*S.pct/100)+(g[k].some(e=>e.per)?' ต่อชุด':''))});L.push('')}
- L.push('ยอดรวมที่ส่ง: '+fmt(c.sent)+' บาท ('+S.pct+'% ของยอดซื้อ '+fmt(c.bets)+')');
- if(c.hasRes){L.push('ผลรางวัล: '+(d.res.first||'-')+' / ล่าง '+(d.res.low2||'-'));L.push('ยอดที่เจ้าต้องจ่าย: '+fmt(c.recH)+' บาท')}
- output('สรุปยอดส่งเจ้า','poy-'+d.date+'.txt',L.join('\n'))}
-function output(title,name,text){outName=name;outData=text;$('oTitle').textContent=title;$('oText').value=text;$('oMsg').textContent='';openD(dlgOut)}
-
-function act(a,t){switch(a){
- case 'tab':tab=t.dataset.t;render();scrollTo(0,0);break;
- case 'cAdd':addCust();break;
- case 'add':openAdd(t.dataset.id);break;
- case 'fab':openAdd(null);break;
- case 'dc':{const id=t.dataset.id;ask('ลบลูกค้า “'+cname(id)+'” และรายการทั้งหมดของลูกค้ารายนี้ (ทุกงวด)?',()=>{S.customers=S.customers.filter(c=>c.id!==id);for(const x of Object.values(S.draws))x.entries=x.entries.filter(e=>e.cid!==id);save();render();say('ลบแล้ว')});break}
- case 'pay':{const e=cur().entries.find(x=>x.id===t.dataset.id);if(e){e.paid=!e.paid;save();render()}break}
- case 'del':{const id=t.dataset.id;ask('ลบรายการนี้?',()=>{cur().entries=cur().entries.filter(x=>x.id!==id);save();render()});break}
- case 'sendH':sendHouse();break;
- case 'mNew':$('dDate').value=iso(new Date());openD(dlgDraw);break;
- case 'mBackup':output('สำรองข้อมูลทั้งหมด','poyhuay-backup-'+iso(new Date())+'.json',JSON.stringify(S));break;
- case 'mLoad':$('fileIn').click();break;
- case 'mDel':ask('ลบงวดนี้ทั้งหมด?',()=>{delete S.draws[S.cur];S.cur=null;autoOpen();save();render()});break;
- case 'saveDraw':{const d=$('dDate').value;if(!d)return;const id=openDraw(d,true);S.cur=id;save();closeD(dlgDraw);tab='home';render();break}
- case 'saveAdd':saveAdd();break;
- case 'close':closeD($(t.dataset.d));break;
- case 'oSave':try{const u=URL.createObjectURL(new Blob(['\ufeff'+outData],{type:'text/plain;charset=utf-8'}));const l=document.createElement('a');l.href=u;l.download=outName;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);$('oMsg').textContent='บันทึกไฟล์แล้ว (ดูในโฟลเดอร์ดาวน์โหลด)'}catch(e){$('oMsg').textContent='บันทึกไม่ได้ กด “คัดลอก” แทน'}break;
- case 'oCopy':(async()=>{try{await navigator.clipboard.writeText(outData)}catch(e){$('oText').select();document.execCommand('copy')}$('oMsg').textContent='คัดลอกแล้ว'})();break;
- case 'askOk':{const f=askFn;askFn=null;closeD(dlgAsk);if(f)f();break}
- case 'askNo':askFn=null;closeD(dlgAsk);break}}
-
-document.addEventListener('click',e=>{const t=e.target.closest('[data-a]');if(!t)return;try{act(t.dataset.a,t)}catch(err){say('ผิดพลาด: '+err.message)}});
-document.addEventListener('change',e=>{const t=e.target;try{
- if(t.id==='rFirst'||t.id==='rLow'){cur().res={first:$('rFirst').value.replace(/\D/g,''),low2:$('rLow').value.replace(/\D/g,'')};save();upd()}
- else if(t.id==='pct'){S.pct=Math.min(100,Math.max(0,parseFloat(t.value)||0));save();upd()}
- else if(t.dataset.rc){S.rc[t.dataset.rc]=parseFloat(t.value)||0;save();upd()}
- else if(t.dataset.rh){S.rh[t.dataset.rh]=parseFloat(t.value)||0;save();upd()}
- else if(t.id==='histSel'){hist=t.value;render()}
- else if(t.id==='drawSel'){S.cur=t.value;save();render()}
- else if(t.id==='aType'){lastType=t.value;$('aNum').maxLength=TYPES[lastType].len;prev();$('aNum').focus()}
- else if(t.id==='aPer'){prev()}
- else if(t.id==='fileIn'){importFile(t)}
-}catch(err){say('ผิดพลาด: '+err.message)}});
-document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
- if(e.target.id==='cNew'){e.preventDefault();addCust()}
- else if(e.target.id==='aAmt'||e.target.id==='aNum'){e.preventDefault();saveAdd()}});
-document.addEventListener('input',e=>{if(e.target.id==='aAmt')prev();if(e.target.id==='aNum'){prev();if(e.target.value.length>=TYPES[$('aType').value].len)$('aAmt').focus()}});
-
-function upd(){const o=$('resOut');if(o)o.innerHTML=resOut()}
-function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
- r.onload=()=>{try{const o=JSON.parse(r.result);if(!o.draws)throw 0;
-  const mp={};for(const c of o.customers||[]){let x=S.customers.find(k=>k.name===c.name);if(!x){x={id:c.id||uid(),name:c.name};S.customers.push(x)}mp[c.id]=x.id}
-  for(const d of Object.values(o.draws)){const id=openDraw(d.date,false),t=S.draws[id];if(!t.entries.length)t.res=d.res||{};
-   for(const en of d.entries||[]){const cid=mp[en.cid];if(cid&&!t.entries.some(x=>x.id===en.id))t.entries.push(Object.assign({},en,{cid}))}}
-  fix();save();render();say('โหลดไฟล์เรียบร้อย')}catch(x){say('ไฟล์นี้ไม่ใช่ไฟล์สำรองจากแอพนี้')}inp.value=''};
- r.readAsText(f)}
-
-window.addEventListener('error',e=>say('ผิดพลาด: '+e.message));
-render();
-</script>
-</body>
-</html>
-
+ const per={};d.entries.forEach(e=>{const p=per[e.cid]=per[e.cid]||{bets:0,unpaid:0,win:0};p.bets+=stake(e);if(!e.paid)p.unpaid+=s
