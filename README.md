@@ -70,6 +70,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;b
 <div class="row"><div><label class="l">ประเภท</label><select id="aType"></select></div><div><label class="l">เลข</label><input type="tel" id="aNum" inputmode="numeric" maxlength="3"></div></div>
 <div class="row"><div><label class="l">จำนวนเงิน (บาท)</label><input type="number" id="aAmt" inputmode="decimal" min="0"></div><div><label class="l">วันที่ซื้อ</label><input type="date" id="aDate"></div></div>
 <div class="mut" id="aPrev" style="margin-top:8px"></div>
+<label class="chk" id="aPerWrap" style="margin-top:8px"><input type="checkbox" id="aPer"> คิดเงินทุกชุดที่สลับ (ราคานี้ต่อ 1 ชุด)</label>
 <label class="chk" style="margin-top:12px"><input type="checkbox" id="aPaid"> จ่ายเงินแล้ว</label>
 <p id="aErr" style="color:var(--red);margin:6px 0 0;font-size:14px"></p>
 <div class="row" style="margin-top:12px"><button class="btn sec" data-a="close" data-d="dlgAdd">ปิด</button><button class="btn" data-a="saveAdd">บันทึก แล้วเพิ่มต่อ</button></div></dialog>
@@ -88,6 +89,7 @@ const TYPES={t2:{n:'2 ตัวบน เต็ง',g:'เต็ง',len:2,c:70,
 const isToad=t=>TYPES[t]&&TYPES[t].g==='โต๊ด';
 const perms=x=>{if(x.length<=1)return[x];const o=new Set();for(let i=0;i<x.length;i++)for(const p of perms(x.slice(0,i)+x.slice(i+1)))o.add(x[i]+p);return[...o]};
 const canon=(t,n)=>isToad(t)?n.split('').sort().join(''):n;
+const stake=e=>e.per&&isToad(e.type)?e.amt*perms(e.num).length:e.amt;
 const KEY='poyhuay.v1';
 const def=()=>({customers:[],draws:{},cur:null,rc:{},rh:{},pct:100});
 let S=def(),memOnly=false,raw=null,tab='home',hist='all',lastType='t2',askFn=null,outName='',outData='';
@@ -134,30 +136,30 @@ function winnersOf(d){const r=d.res||{},f=r.first||'',l2=r.low2||'';if(f.length!
   if(T==='d3')h=l3&&srt(e.num)===srt(l3);if(T==='d2')h=t2&&srt(e.num)===srt(t2);if(T==='e2')h=l2&&srt(e.num)===srt(l2);if(T==='rt')h=l3&&l3.includes(e.num);if(T==='rb')h=l2&&l2.includes(e.num);
   if(h)out.push(Object.assign({},e,{payC:e.amt*S.rc[T],payH:e.amt*S.rh[T]*S.pct/100}))}
  return out}
-function calc(d){const W=winnersOf(d),bets=d.entries.reduce((a,e)=>a+e.amt,0),sent=bets*S.pct/100;
+function calc(d){const W=winnersOf(d),bets=d.entries.reduce((a,e)=>a+stake(e),0),sent=bets*S.pct/100;
  const winC=W.reduce((a,w)=>a+w.payC,0),recH=W.reduce((a,w)=>a+w.payH,0);
- const per={};d.entries.forEach(e=>{const p=per[e.cid]=per[e.cid]||{bets:0,unpaid:0,win:0};p.bets+=e.amt;if(!e.paid)p.unpaid+=e.amt});
+ const per={};d.entries.forEach(e=>{const p=per[e.cid]=per[e.cid]||{bets:0,unpaid:0,win:0};p.bets+=stake(e);if(!e.paid)p.unpaid+=stake(e)});
  W.forEach(w=>{per[w.cid].win+=w.payC});
  const hasRes=!!(d.res&&((d.res.first||'').length===6||(d.res.low2||'').length===2));
  return{W,bets,sent,winC,recH,per,profit:bets-winC-sent+recH,hasRes}}
 function group(d){const g={};for(const e of d.entries){const k=e.type+'|'+canon(e.type,e.num);(g[k]=g[k]||[]).push(e)}return g}
 
-function home(){const d=cur(),E=d.entries,tot=E.reduce((a,e)=>a+e.amt,0),pd=E.filter(e=>e.paid).reduce((a,e)=>a+e.amt,0),g=group(d),keys=Object.keys(g).sort(),dups=keys.filter(k=>g[k].length>1);
+function home(){const d=cur(),E=d.entries,tot=E.reduce((a,e)=>a+stake(e),0),pd=E.filter(e=>e.paid).reduce((a,e)=>a+stake(e),0),g=group(d),keys=Object.keys(g).sort(),dups=keys.filter(k=>g[k].length>1);
  const who=k=>g[k].map(e=>esc(cname(e.cid))+' '+fmt(e.amt)).join(' · ');
  const n=Math.round((new Date(d.date+'T00:00:00')-new Date(iso(new Date())+'T00:00:00'))/864e5);
  let h=`<div class="card"><h2>งวด ${dstr(d.date)}</h2><div class="mut" style="margin:-6px 0 8px">${n>0?'อีก '+n+' วันหวยออก':n===0?'หวยออกวันนี้':'หวยออกแล้ว'} · ${E.length} รายการ</div><div class="stats"><div class="stat"><span class="mut">ยอดรวม</span><b>${fmt(tot)}</b></div><div class="stat"><span class="mut">รับแล้ว</span><b class="paid">${fmt(pd)}</b></div><div class="stat"><span class="mut">ค้างจ่าย</span><b class="unpaid">${fmt(tot-pd)}</b></div></div></div>
  <div class="card ${dups.length?'dup':''}"><h2>เลขซ้ำ (${dups.length})</h2>`+
- (dups.length?dups.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span> ${g[k].length} คน<div class="mut">${who(k)}</div></div><b>${fmt(g[k].reduce((a,e)=>a+e.amt,0))}</b></div>`}).join(''):'<div class="mut">ยังไม่มีเลขซ้ำ</div>')+
+ (dups.length?dups.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span> ${g[k].length} คน<div class="mut">${who(k)}</div>${isToad(t)?'<div class="mut">สลับ: '+perms(n).join(' · ')+'</div>':''}</div><b>${fmt(g[k].reduce((a,e)=>a+e.amt,0))}</b></div>`}).join(''):'<div class="mut">ยังไม่มีเลขซ้ำ</div>')+
  `</div><div class="card"><h2>ใครซื้อเลขอะไรบ้าง</h2>`+
- (keys.length?keys.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span><div class="mut">${who(k)}</div></div></div>`}).join(''):'<div class="empty">ยังไม่มีโพย ไปที่แท็บ “ลูกค้า”</div>')+'</div>';
+ (keys.length?keys.map(k=>{const[t,n]=k.split('|');return`<div class="item"><span class="num">${n}</span><div class="g"><span class="tag">${TYPES[t].n}</span><div class="mut">${who(k)}</div>${isToad(t)?'<div class="mut">สลับ: '+perms(n).join(' · ')+'</div>':''}</div></div>`}).join(''):'<div class="empty">ยังไม่มีโพย ไปที่แท็บ “ลูกค้า”</div>')+'</div>';
  return h}
 
 function cust(){const d=cur();let h=`<div class="card"><h2>เพิ่มลูกค้า</h2><div class="row"><input type="text" id="cNew" placeholder="พิมพ์ชื่อลูกค้า" autocomplete="off"><button class="btn" data-a="cAdd" style="flex:none">เพิ่ม</button></div></div>`;
  if(!S.customers.length)return h+'<div class="card empty">ยังไม่มีลูกค้า พิมพ์ชื่อด้านบนแล้วกด “เพิ่ม”</div>';
- for(const c of [...S.customers].sort((a,b)=>a.name.localeCompare(b.name,'th'))){const es=d.entries.filter(e=>e.cid===c.id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),t=es.reduce((s,e)=>s+e.amt,0),u=es.filter(e=>!e.paid).reduce((s,e)=>s+e.amt,0);
+ for(const c of [...S.customers].sort((a,b)=>a.name.localeCompare(b.name,'th'))){const es=d.entries.filter(e=>e.cid===c.id).sort((a,b)=>(b.date||'').localeCompare(a.date||'')),t=es.reduce((s,e)=>s+stake(e),0),u=es.filter(e=>!e.paid).reduce((s,e)=>s+stake(e),0);
   h+=`<div class="card"><div class="row sp"><h2 style="margin:0">${esc(c.name)}</h2><span><button class="btn" data-a="add" data-id="${c.id}">+ แทง</button> <button class="x" data-a="dc" data-id="${c.id}" aria-label="ลบลูกค้า">🗑</button></span></div>
   <div class="mut">รวม ${fmt(t)} บาท · <span class="${u?'unpaid':'paid'}">${u?'ค้าง '+fmt(u):'จ่ายครบ'}</span></div>`+
-  es.map(e=>`<div class="item"><span class="num">${e.num}</span><div class="g"><span class="tag">${TYPES[e.type]?TYPES[e.type].n:e.type}</span> ${fmt(e.amt)} บาท<div class="mut">ซื้อวันที่ ${e.date?dstr(e.date):'-'}</div>${isToad(e.type)?`<div class="mut">โต๊ด ถูกเมื่อออก: ${perms(e.num).join(' · ')}</div>`:''}</div><button class="chip ${e.paid?'ok':'no'}" data-a="pay" data-id="${e.id}">${e.paid?'จ่ายแล้ว ✓':'ยังไม่จ่าย'}</button><button class="x" data-a="del" data-id="${e.id}" aria-label="ลบ">×</button></div>`).join('')+'</div>'}
+  es.map(e=>`<div class="item"><span class="num">${e.num}</span><div class="g"><span class="tag">${TYPES[e.type]?TYPES[e.type].n:e.type}</span> ${fmt(e.amt)} บาท${e.per&&isToad(e.type)?' × '+perms(e.num).length+' ชุด = '+fmt(stake(e))+' บาท':''}<div class="mut">ซื้อวันที่ ${e.date?dstr(e.date):'-'}</div>${isToad(e.type)?`<div class="mut">สลับเลขให้แล้ว: ${perms(e.num).join(' · ')}</div>`:''}</div><button class="chip ${e.paid?'ok':'no'}" data-a="pay" data-id="${e.id}">${e.paid?'จ่ายแล้ว ✓':'ยังไม่จ่าย'}</button><button class="x" data-a="del" data-id="${e.id}" aria-label="ลบ">×</button></div>`).join('')+'</div>'}
  return h}
 
 function res(){const d=cur(),r=d.res||{};
@@ -217,20 +219,20 @@ function openAdd(cid){if(!S.customers.length){tab='cust';render();return say('�
  $('aType').innerHTML=['เต็ง','โต๊ด','วิ่ง'].map(g=>`<optgroup label="${g==='เต็ง'?'เต็ง (ถูกเลขและตำแหน่ง)':g==='โต๊ด'?'โต๊ด (ถูกเลข สลับที่ได้)':'วิ่ง'}">`+Object.keys(TYPES).filter(k=>TYPES[k].g===g).map(k=>`<option value="${k}">${TYPES[k].n}</option>`).join('')+'</optgroup>').join('');
  $('aType').value=lastType;$('aNum').maxLength=TYPES[lastType].len;$('aNum').value='';$('aAmt').value='';$('aDate').value=iso(new Date());$('aErr').textContent='';prev();
  openD(dlgAdd);setTimeout(()=>$('aNum').focus(),80)}
-function prev(){const t=$('aType').value,n=$('aNum').value.trim();let s='จ่ายลูกค้าบาทละ '+S.rc[t]+' · ';
- if(isToad(t))s+=n.length===TYPES[t].len?'โต๊ด ถูกเมื่อออก: '+perms(n).join(' · '):'โต๊ด ถูกเลข สลับตำแหน่งได้ (แอพรันให้)';
+function prev(){const t=$('aType').value,n=$('aNum').value.trim(),toad=isToad(t);$('aPerWrap').style.display=toad?'flex':'none';let s='จ่ายลูกค้าบาทละ '+S.rc[t]+' · ';
+ if(toad){if(n.length===TYPES[t].len){const p=perms(n),a=parseFloat($('aAmt').value);s+='สลับเลขให้ '+p.length+' ชุด: '+p.join(' · ');if($('aPer').checked&&a>0)s+=' · รวม '+fmt(a*p.length)+' บาท ('+p.length+' ชุด × '+fmt(a)+')'}else s+='โต๊ด ถูกเลขสลับตำแหน่งได้ (แอพสลับให้)'}
  else if(TYPES[t].g==='เต็ง')s+='เต็ง ต้องถูกทั้งเลขและตำแหน่ง';else s+='วิ่ง ถูกถ้ามีเลขนี้ออก';
  $('aPrev').textContent=s}
 function saveAdd(){const cid=$('aCust').value,type=$('aType').value,num=$('aNum').value.trim(),amt=parseFloat($('aAmt').value),err=$('aErr');
  if(!cid)return err.textContent='เลือกลูกค้า';
  if(!new RegExp('^\\d{'+TYPES[type].len+'}$').test(num))return err.textContent='เลขต้องเป็นตัวเลข '+TYPES[type].len+' หลัก';
  if(!(amt>0))return err.textContent='ใส่จำนวนเงิน';
- cur().entries.push({id:uid(),cid,type,num,amt,date:$('aDate').value||iso(new Date()),paid:$('aPaid').checked});save();render();
+ cur().entries.push({id:uid(),cid,type,num,amt,date:$('aDate').value||iso(new Date()),paid:$('aPaid').checked,per:isToad(type)&&$('aPer').checked});save();render();
  $('aNum').value='';$('aAmt').value='';$('aNum').focus();err.textContent='บันทึกแล้ว ✓ '+cname(cid)+' '+num;prev()}
 function sendHouse(){const d=cur(),c=calc(d),g=group(d),L=['สรุปยอดส่งเจ้า งวดวันที่ '+dstr(d.date),''];
  const agg={};for(const k in g)agg[k]=g[k].reduce((a,e)=>a+e.amt,0);
  for(const t in TYPES){const ks=Object.keys(agg).filter(k=>k.startsWith(t+'|')).sort();if(!ks.length)continue;
-  L.push('['+TYPES[t].n+']');ks.forEach(k=>L.push(k.split('|')[1]+' = '+fmt(agg[k]*S.pct/100)));L.push('')}
+  L.push('['+TYPES[t].n+']');ks.forEach(k=>{const n=k.split('|')[1];L.push(n+(isToad(t)?' (สลับ: '+perms(n).join(' ')+')':'')+' = '+fmt(agg[k]*S.pct/100)+(g[k].some(e=>e.per)?' ต่อชุด':''))});L.push('')}
  L.push('ยอดรวมที่ส่ง: '+fmt(c.sent)+' บาท ('+S.pct+'% ของยอดซื้อ '+fmt(c.bets)+')');
  if(c.hasRes){L.push('ผลรางวัล: '+(d.res.first||'-')+' / ล่าง '+(d.res.low2||'-'));L.push('ยอดที่เจ้าต้องจ่าย: '+fmt(c.recH)+' บาท')}
  output('สรุปยอดส่งเจ้า','poy-'+d.date+'.txt',L.join('\n'))}
@@ -266,12 +268,13 @@ document.addEventListener('change',e=>{const t=e.target;try{
  else if(t.id==='histSel'){hist=t.value;render()}
  else if(t.id==='drawSel'){S.cur=t.value;save();render()}
  else if(t.id==='aType'){lastType=t.value;$('aNum').maxLength=TYPES[lastType].len;prev();$('aNum').focus()}
+ else if(t.id==='aPer'){prev()}
  else if(t.id==='fileIn'){importFile(t)}
 }catch(err){say('ผิดพลาด: '+err.message)}});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter')return;
  if(e.target.id==='cNew'){e.preventDefault();addCust()}
  else if(e.target.id==='aAmt'||e.target.id==='aNum'){e.preventDefault();saveAdd()}});
-document.addEventListener('input',e=>{if(e.target.id==='aNum'){prev();if(e.target.value.length>=TYPES[$('aType').value].len)$('aAmt').focus()}});
+document.addEventListener('input',e=>{if(e.target.id==='aAmt')prev();if(e.target.id==='aNum'){prev();if(e.target.value.length>=TYPES[$('aType').value].len)$('aAmt').focus()}});
 
 function upd(){const o=$('resOut');if(o)o.innerHTML=resOut()}
 function importFile(inp){const f=inp.files[0];if(!f)return;const r=new FileReader();
@@ -287,3 +290,4 @@ render();
 </script>
 </body>
 </html>
+
